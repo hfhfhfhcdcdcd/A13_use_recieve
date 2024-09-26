@@ -1,25 +1,59 @@
 module  use_recieve(
-    input rst,
-    input sclk,
-    input [7:0]data,
-    input rx_done,
-    output [7:0]ctrl,
-    output [31:0]time_ctrl
+    input                   rst         ,
+    input                   sclk        ,
+    input [7:0]             data        ,
+    input                   rx_done     ,   
+    output  reg  [7:0]      ctrl        ,
+    output  reg  [31:0]     time_ctrl      
 );
-/*
-制定一个协议：能清晰地区分，来自输入模块的数据中，
-那一部分是属于下一模块 ctrl 端口的、那些数据是属
-于下一模块的 time_ctrl 端口的。
-
-约定：当接收到rx_done信号时，开始检测传输过来的数据。
-所以协议可以是：当检测到rx_done信号时，先看看是否传
-来两个数据：oxAB、oxCD, 如果检测到这两个数据，开始
-接收传过来的数据——推测是40bit，因为下一个模块要用到
-40bit：8bitctrl、32bittime_ctrl——接收完，最后仍然
-要检测是否有oxEF这个字节，有的话说明刚才接收到的数据
-是正确的；没有则弃用刚才接收到的数据。
-
-既然要
-*/
-
+/*-------------协议模块--------------*/
+reg [7:0] data_block [7:0];//为了存储input进来的40bit 数据
+always @(posedge sclk or negedge rst) begin
+    if (!rst) begin
+        data_block[0]<=8'd0;//0xAB
+        data_block[1]<=8'd0;//0xCD
+        data_block[2]<=8'd0;
+        data_block[3]<=8'd0;//time_ctrl[7:0]
+        data_block[4]<=8'd0;//time_ctrl[15:8]
+        data_block[5]<=8'd0;//time_ctrl[23:16]
+        data_block[6]<=8'd0;//time_ctrl[31:24]
+        data_block[7]<=8'd0;//0xEF
+    end
+    else if (rx_done) begin
+        data_block[0]<=data_block[1];
+        data_block[1]<=data_block[2];
+        data_block[2]<=data_block[3];
+        data_block[3]<=data_block[4];
+        data_block[4]<=data_block[5];
+        data_block[5]<=data_block[6];
+        data_block[6]<=data_block[7];
+        data_block[7]<=data;        
+    end
+    else
+        data_block[0]<=data_block[0];
+        data_block[1]<=data_block[1];
+        data_block[2]<=data_block[2];
+        data_block[3]<=data_block[3];
+        data_block[4]<=data_block[4];
+        data_block[5]<=data_block[5];
+        data_block[6]<=data_block[6];
+        data_block[7]<=data_block[7];    
+end
+/*-----判断data_block[0]、data_block[1]、data_block[7]------*/
+always @(posedge sclk or negedge rst) begin
+    if (data_block[0]&&data_block[1]&&data_block[7]) begin
+        ctrl<=data_block[2];
+        time_ctrl[7:0]  <=data_block[3];
+        time_ctrl[15:8] <=data_block[4];
+        time_ctrl[23:16]<=data_block[5];
+        time_ctrl[31:24]<=data_block[6];        
+    end
+    else begin
+        ctrl<=8'd0;
+        time_ctrl[7:0]  <=8'd0;
+        time_ctrl[15:8] <=8'd0;
+        time_ctrl[23:16]<=8'd0;
+        time_ctrl[31:24]<=8'd0;
+    end
+end
 endmodule
